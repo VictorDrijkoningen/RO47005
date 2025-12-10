@@ -178,3 +178,19 @@ def run(
 if __name__ == "__main__":
     #### Define and parse (optional) arguments for the script ##
     run()
+
+    # Initialize environment
+    env = ProjectEnvironment(...)
+
+    # Get the matrix
+    map_matrix, x_min, y_min, resolution = env.get_occupancy_map()
+
+    # Example: Check if point (1.5, 2.0) is occupied
+    test_x, test_y = 1.5, 2.0
+    grid_x = int((test_x - x_min) / resolution)
+    grid_y = int((test_y - y_min) / resolution)
+
+    if map_matrix[grid_y, grid_x] == 1:
+        print("Collision!")
+    else:
+        print("Free space")
