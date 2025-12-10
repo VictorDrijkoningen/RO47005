@@ -1,20 +1,3 @@
-"""Script demonstrating the joint use of simulation and control.
-
-The simulation is run by a `CtrlAviary` environment.
-The control is given by the PID implementation in `DSLPIDControl`.
-
-Example
--------
-In a terminal, run as:
-
-    $ python pid.py
-
-Notes
------
-The drones move, at different altitudes, along cicular trajectories 
-in the X-Y plane, around point (0, -.3).
-
-"""
 import os
 import time
 import argparse
@@ -46,6 +29,64 @@ DEFAULT_DURATION_SEC = 30
 DEFAULT_OUTPUT_FOLDER = 'results'
 DEFAULT_COLAB = False
 
+# --- RRT / COLLISION HELPER FUNCTIONS ---
+
+def check_line_collision(env, start_pos, end_pos, num_checks=10):
+    """
+    Checks if the straight line segment between two 3D points
+    is collision-free using the environment's 3D occupancy map.
+    """
+    start_pos = np.array(start_pos)
+    end_pos = np.array(end_pos)
+    
+    for i in range(1, num_checks + 1):
+        t = i / num_checks
+        point = start_pos + t * (end_pos - start_pos)
+        if env.check_collision(point):
+            return True 
+    return False
+
+def get_furthest_goal(env, z_height):
+
+    """
+    Finds a valid, collision-free goal inside the furthest room (ROWS-1, COLS-1).
+    """
+    # Hardcoded to match ProjectEnvironment settings
+    ROWS = 3
+    COLS = 3
+    ROOM_W = 3.0
+    
+    # Target the top-right corner room indices
+    target_r = ROWS - 1
+    target_c = COLS - 1
+    
+    # Calculate the bounds of that specific room
+    # (Remember: room center is at offset + index * width + width/2)
+    # But since we centered the grid, we can calculate min/max simply:
+    _, x_min, y_min, _, res = env.get_occupancy_map()
+
+    # Calculate the min/max X and Y for just THIS room
+    room_x_min = x_min + (target_c * ROOM_W)
+    room_x_max = room_x_min + ROOM_W
+    room_y_min = y_min + (target_r * ROOM_W)
+    room_y_max = room_y_min + ROOM_W
+
+    # Try 100 times to find a safe spot in this room
+    for _ in range(100):
+        rand_x = np.random.uniform(room_x_min + 0.5, room_x_max - 0.5)
+        rand_y = np.random.uniform(room_y_min + 0.5, room_y_max - 0.5)
+        
+        candidate = np.array([rand_x, rand_y, z_height])
+        
+        if not env.check_collision(candidate):
+            return candidate
+
+    print("[CRITICAL WARNING] Could not find safe goal in furthest room! Using unsafe center.")
+    # Fallback to center if the room is completely packed
+    center_x = room_x_min + ROOM_W/2
+    center_y = room_y_min + ROOM_W/2
+    return np.array([center_x, center_y, z_height])
+
 def run(
         drone=DEFAULT_DRONES,
         num_drones=DEFAULT_NUM_DRONES,
@@ -64,23 +105,25 @@ def run(
     #### Initialize the simulation #############################
     H = .1
     H_STEP = .05
-    R = .6
-    INIT_XYZS = np.array([[R*np.cos((i/6)*2*np.pi+np.pi/2), R*np.sin((i/6)*2*np.pi+np.pi/2)-R, H+i*H_STEP] for i in range(num_drones)])
+    R = .3
+    
+    # Spawn drones centered at (0,0) which is now the first room
+    INIT_XYZS = np.array([[R*np.cos((i/6)*2*np.pi+np.pi/2), R*np.sin((i/6)*2*np.pi+np.pi/2), H+i*H_STEP] for i in range(num_drones)])
     INIT_RPYS = np.array([[0, 0,  i * (np.pi/2)/num_drones] for i in range(num_drones)])
 
-    #### Initialize a circular trajectory ######################
+    #### Initialize a circular trajectory (Placeholder) ##########
     _ = time.time()
-
     PERIOD = 20
     NUM_WP = control_freq_hz*PERIOD
     TARGET_POS = np.zeros((NUM_WP,3))
+    
+    # Currently just hovering/circling near start. 
+    # YOU WILL REPLACE THIS WITH YOUR RRT PATH LATER
     for i in range(NUM_WP):
-        TARGET_POS[i, :] = R*np.cos((i/NUM_WP)*(2*np.pi)+np.pi/2)+INIT_XYZS[0, 0], R*np.sin((i/NUM_WP)*(2*np.pi)+np.pi/2)-R+INIT_XYZS[0, 1], 0
+        TARGET_POS[i, :] = R*np.cos((i/NUM_WP)*(2*np.pi)+np.pi/2)+INIT_XYZS[0, 0], R*np.sin((i/NUM_WP)*(2*np.pi)+np.pi/2)+INIT_XYZS[0, 1], 0
     wp_counters = np.array([int((i*NUM_WP/6)%NUM_WP) for i in range(num_drones)])
 
-    endzone_box = [0, 1000., 0, 1000., .001, 1000.]   #x>value x<value, y>value, y<value, z>value, z<value
     time_trajectory_calculation = time.time() - _
-
 
     #### Create the environment ################################
     env = ProjectEnvironment(drone_model=drone,
@@ -97,6 +140,26 @@ def run(
                         user_debug_gui=user_debug_gui
                         )
 
+    # --- GOAL GENERATION ---
+    goal_pos = get_furthest_goal(env, z_height=1.0)
+    print(f"Goal set at furthest room: {goal_pos}")
+    
+    # Visualize the goal with a duck
+    # SPAWN THE DUCK 
+    p.loadURDF("duck_vhacd.urdf", 
+               goal_pos, 
+               p.getQuaternionFromEuler([np.pi/2, 0, 0]), # Rotated 90 degrees around X-axis
+               useFixedBase=True,
+               physicsClientId=env.getPyBulletClient())
+    
+    # Define Endzone Box (Target Room Volume) for success check
+    # +/- 1.5m around the goal point
+    endzone_box = [
+        goal_pos[0] - 1.5, goal_pos[0] + 1.5, 
+        goal_pos[1] - 1.5, goal_pos[1] + 1.5, 
+        0.1, 2.0
+    ]
+    # -----------------------
 
     #### Initialize the logger #################################
     logger = Logger(logging_freq_hz=control_freq_hz,
@@ -124,7 +187,6 @@ def run(
             action[j, :], _, _ = ctrl[j].computeControlFromState(control_timestep=env.CTRL_TIMESTEP,
                                                                     state=obs[j],
                                                                     target_pos=np.hstack([TARGET_POS[wp_counters[j], 0:2], INIT_XYZS[j, 2]]),
-                                                                    # target_pos=INIT_XYZS[j, :] + TARGET_POS[wp_counters[j], :],
                                                                     target_rpy=INIT_RPYS[j, :]
                                                                     )
 
@@ -138,16 +200,18 @@ def run(
                        timestamp=i/env.CTRL_FREQ,
                        state=obs[j],
                        control=np.hstack([TARGET_POS[wp_counters[j], 0:2], INIT_XYZS[j, 2], INIT_RPYS[j, :], np.zeros(6)])
-                       # control=np.hstack([INIT_XYZS[j, :]+TARGET_POS[wp_counters[j], :], INIT_RPYS[j, :], np.zeros(6)])
                        )
             
-            if obs[j, 0]>endzone_box[0] and obs[j,0]<endzone_box[1] and obs[j,1]>endzone_box[2] and obs[j,1]<endzone_box[3] and obs[j,2]>endzone_box[4] and obs[j,2]<endzone_box[5]:
+            # Check if drone is in endzone
+            if (obs[j, 0] > endzone_box[0] and obs[j,0] < endzone_box[1] and 
+                obs[j, 1] > endzone_box[2] and obs[j,1] < endzone_box[3] and 
+                obs[j, 2] > endzone_box[4] and obs[j,2] < endzone_box[5]):
+                
                 if not drones_in_endzone[j]:
-                    print(f"Drone {j} reached the end zone")
+                    print(f"Drone {j} reached the end zone!")
                     drones_in_endzone_times[j] = time.time()-START
 
                 drones_in_endzone[j] = True
-                
 
         #### Printout ##############################################
         env.render()
@@ -161,36 +225,14 @@ def run(
 
     #### Save the simulation results ###########################
     logger.save()
-    # logger.save_as_csv("pid") # Optional CSV save
-
-    # save metrics
-
-
-    print(f"Computational time for the trajectory planner: {time_trajectory_calculation}")
-    print(f"Trajectory length: take this object or the logger? {obs[j]}")
+    
+    print(f"Computational time for trajectory planner: {time_trajectory_calculation}")
     print(f"Drones in endzone times: {drones_in_endzone_times}")
-    print(f"Drones success : {drones_in_endzone}")
+    print(f"Drones success: {drones_in_endzone}")
 
     #### Plot the simulation results ###########################
     if plot:
         logger.plot()
 
 if __name__ == "__main__":
-    #### Define and parse (optional) arguments for the script ##
     run()
-
-    # Initialize environment
-    env = ProjectEnvironment(...)
-
-    # Get the matrix
-    map_matrix, x_min, y_min, resolution = env.get_occupancy_map()
-
-    # Example: Check if point (1.5, 2.0) is occupied
-    test_x, test_y = 1.5, 2.0
-    grid_x = int((test_x - x_min) / resolution)
-    grid_y = int((test_y - y_min) / resolution)
-
-    if map_matrix[grid_y, grid_x] == 1:
-        print("Collision!")
-    else:
-        print("Free space")
