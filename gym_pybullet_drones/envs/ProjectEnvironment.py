@@ -10,7 +10,7 @@ class ProjectEnvironment(CtrlAviary):
         """
         Builds the environment and generates a 3D Occupancy Grid (Voxel Map).
         """
-        np.random.seed(3) 
+        np.random.seed(155)
 
         # --- Configuration ---
         ROWS, COLS = 3, 3
@@ -166,39 +166,176 @@ class ProjectEnvironment(CtrlAviary):
         center_y = offset_y + grid_h / 2
         create_box([center_x, center_y, WALL_H], [grid_w/2, grid_h/2, 0.05], color=[0.8, 0.8, 0.8, 0.3])
 
-        # 4. FURNITURE
+# ... inside _addObstacles ...
+
+        # 4. FURNITURE (Balanced Distribution)
         env_dir = os.path.dirname(os.path.abspath(__file__))
         furniture_dir = os.path.join(env_dir, "../assets/furniture")
+        
         try:
-            furniture_files = [f for f in os.listdir(furniture_dir) if f.endswith('.urdf')]
+            all_files = [f for f in os.listdir(furniture_dir) if f.lower().endswith(('.stl', '.obj'))]
         except FileNotFoundError:
-            furniture_files = []
+            all_files = []
 
-        for _ in range(NUM_DEBRIS):
-            r = np.random.randint(0, ROWS)
-            c = np.random.randint(0, COLS)
-            room_center_x = offset_x + c * ROOM_W + ROOM_W / 2
-            room_center_y = offset_y + r * ROOM_W + ROOM_W / 2
-            dx = np.random.uniform(-(ROOM_W/2 - 0.6), (ROOM_W/2 - 0.6))
-            dy = np.random.uniform(-(ROOM_W/2 - 0.6), (ROOM_W/2 - 0.6))
+        # --- STEP A: Group Files by Category ---
+        # We create buckets so we can pick 1 couch, then 1 wardrobe, etc.
+        furniture_groups = {
+            "couch": [],
+            "wardrobe": [],
+            "cabinet": [], # Shelves/Cabinets
+            "drawers": [], # Chests/Drawers
+            "desk": [],
+            "storage": [],
+            "misc": [],
+            "bin": [],
+            "lamp": []
+        }
+
+        for f in all_files:
+            lower = f.lower()
+            if "couch" in lower or "sofa" in lower: furniture_groups["couch"].append(f)
+            elif "wardrobe" in lower: furniture_groups["wardrobe"].append(f)
+            elif "shelves" in lower or "cabinet" in lower: furniture_groups["cabinet"].append(f)
+            elif "desk" in lower: furniture_groups["desk"].append(f)
+            elif "storage" in lower: furniture_groups["storage"].append(f)
+            elif "bin" in lower: furniture_groups["bin"].append(f)
+            elif "lamp" in lower: furniture_groups["lamp"].append(f)
+            else: furniture_groups["misc"].append(f)
+
+        # Create a list of available categories (only ones that actually have files)
+        available_categories = [k for k, v in furniture_groups.items() if len(v) > 0]
+        
+        if not available_categories:
+            print("WARNING: No furniture files found.")
+
+        # --- STEP B: Spawn Loop ---
+        for i in range(NUM_DEBRIS):
+            placed_successfully = False
             
-            if furniture_files:
-                asset_path = os.path.join(furniture_dir, np.random.choice(furniture_files))
-                rand_scale = np.random.uniform(0.8, 1.2)
+            # Round-Robin Selection: 
+            # If i=0 -> Category 0, i=1 -> Category 1, etc.
+            if available_categories:
+                cat_idx = i % len(available_categories)
+                current_cat = available_categories[cat_idx]
+                # Pick a random file from this specific category
+                choice = np.random.choice(furniture_groups[current_cat])
             else:
-                asset_path = os.path.join(env_dir, "../assets/box.urdf")
-                rand_scale = np.random.uniform(5.0, 10.0)
+                continue # Skip if no files
 
-            body_id = p.loadURDF(asset_path,
-                       [room_center_x + dx, room_center_y + dy, 0.0],
-                       p.getQuaternionFromEuler([0, 0, np.random.uniform(0, 3.14)]),
-                       useFixedBase=True,
-                       globalScaling=rand_scale,
-                       physicsClientId=self.CLIENT)
+            lower_name = choice.lower()
+            file_path = os.path.join(furniture_dir, choice)
+
+            furniture_scaler = 0.025
+
+            for attempt in range(200):
+                r = np.random.randint(0, ROWS)
+                c = np.random.randint(0, COLS)
+                
+                room_center_x = offset_x + c * ROOM_W + ROOM_W / 2
+                room_center_y = offset_y + r * ROOM_W + ROOM_W / 2
+                
+                spawn_range = (ROOM_W / 2) - 0.3
+                dx = np.random.uniform(-spawn_range, spawn_range)
+                dy = np.random.uniform(-spawn_range, spawn_range)
+                
+                # --- CONFIGURATION (Scale & Rotation) ---
+                if "couch" in lower_name or "sofa" in lower_name:
+                    rand_scale = np.random.uniform(0.01, 0.012)
+                    x_rot = 0.0  
+                    z_offset = 0.05
+                    
+                elif "wardrobe" in lower_name:
+                    rand_scale = np.random.uniform(furniture_scaler, furniture_scaler)
+                    x_rot = np.pi / 2
+                    z_offset = 0.05
+                    
+                elif "shelves" in lower_name or "cabinet" in lower_name:
+                    rand_scale = np.random.uniform(furniture_scaler, furniture_scaler)
+                    x_rot = np.pi / 2
+                    z_offset = 0.05
+                    
+                elif "desk" in lower_name:
+                    rand_scale = np.random.uniform(furniture_scaler, furniture_scaler)
+                    x_rot = np.pi / 2 
+                    z_offset = 0.05
+                    
+                elif "storage" in lower_name:
+                    rand_scale = np.random.uniform(furniture_scaler, furniture_scaler)
+                    x_rot = np.pi / 2
+                    z_offset = 0.05
+
+                elif "bin" in lower_name:
+                    rand_scale = np.random.uniform(0.2, 0.2)
+                    x_rot = 0
+                    z_offset = 0.05
+
+                elif "lamp" in lower_name:
+                    rand_scale = np.random.uniform(0.7, 0.7)
+                    x_rot = 0
+                    z_offset = 0.05
+                    
+                else:
+                    rand_scale = 0.0003
+                    x_rot = np.pi / 2
+                    z_offset = 0.05
+
+                # Setup
+                test_pos = [room_center_x + dx, room_center_y + dy, z_offset]
+                final_pos = [room_center_x + dx, room_center_y + dy, 0.0]
+
+                # Collision Shape
+                col_id = p.createCollisionShape(p.GEOM_MESH, fileName=file_path, meshScale=[rand_scale]*3)
+                
+                # Test Body (Invisible)
+                orientation = p.getQuaternionFromEuler([x_rot, 0, np.random.uniform(0, 3.14)])
+                
+                body_id = p.createMultiBody(
+                    baseMass=0,
+                    baseCollisionShapeIndex=col_id,
+                    baseVisualShapeIndex=-1,
+                    basePosition=test_pos, 
+                    baseOrientation=orientation
+                )
+                
+                # Overlap Check
+                p.performCollisionDetection()
+                overlap = False
+                for other_body in range(p.getNumBodies()):
+                    if other_body == body_id: continue
+                    try:
+                        body_name = p.getBodyInfo(other_body)[1].decode('utf-8')
+                    except: body_name = "unknown"
+                    if "plane" in body_name.lower(): continue 
+
+                    pts = p.getClosestPoints(bodyA=body_id, bodyB=other_body, distance=0.0)
+                    if len(pts) > 0:
+                        overlap = True
+                        break
+                
+                if overlap:
+                    p.removeBody(body_id)
+                    continue 
+                else:
+                    # Success
+                    p.removeBody(body_id)
+                    
+                    vis_id = p.createVisualShape(p.GEOM_MESH, fileName=file_path, rgbaColor=[np.random.random(), np.random.random(), np.random.random(), 1], meshScale=[rand_scale]*3)
+                    
+                    final_body = p.createMultiBody(
+                        baseMass=0,
+                        baseCollisionShapeIndex=col_id,
+                        baseVisualShapeIndex=vis_id,
+                        basePosition=final_pos,
+                        baseOrientation=orientation
+                    )
+                    
+                    aabb_min, aabb_max = p.getAABB(final_body, physicsClientId=self.CLIENT)
+                    mark_matrix(aabb_min, aabb_max)
+                    placed_successfully = True
+                    break 
             
-            # Use PyBullet AABB to mark the 3D volume of the furniture
-            aabb_min, aabb_max = p.getAABB(body_id, physicsClientId=self.CLIENT)
-            mark_matrix(aabb_min, aabb_max)
+            if not placed_successfully:
+                print(f"[WARNING] Failed to place {choice}.")
 
     def get_occupancy_map(self):
         return self.occupancy_map, self.x_min, self.y_min, self.z_min, self.RESOLUTION

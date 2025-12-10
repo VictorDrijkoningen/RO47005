@@ -139,6 +139,15 @@ def run(
                         obstacles=obstacles,
                         user_debug_gui=user_debug_gui
                         )
+    
+    # --- SET CUSTOM CAMERA START POSITION ---
+    p.resetDebugVisualizerCamera(
+        cameraDistance=6.0,          # How far away the camera is
+        cameraYaw=-90,               # Left/Right rotation
+        cameraPitch=-40,             # Up/Down rotation (-90 is straight down)
+        cameraTargetPosition=[4, 4, 0], # The point the camera looks at
+        physicsClientId=env.getPyBulletClient()
+    )
 
     # --- GOAL GENERATION ---
     goal_pos = get_furthest_goal(env, z_height=1.0)
