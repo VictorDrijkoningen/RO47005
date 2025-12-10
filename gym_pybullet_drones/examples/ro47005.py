@@ -27,7 +27,7 @@ import pybullet as p
 import matplotlib.pyplot as plt
 
 from gym_pybullet_drones.utils.enums import DroneModel, Physics
-from gym_pybullet_drones.envs.CtrlAviary import CtrlAviary
+from gym_pybullet_drones.envs.ProjectEnvironment import ProjectEnvironment
 from gym_pybullet_drones.control.DSLPIDControl import DSLPIDControl
 from gym_pybullet_drones.utils.Logger import Logger
 from gym_pybullet_drones.utils.utils import sync, str2bool
@@ -83,7 +83,7 @@ def run(
 
 
     #### Create the environment ################################
-    env = CtrlAviary(drone_model=drone,
+    env = ProjectEnvironment(drone_model=drone,
                         num_drones=num_drones,
                         initial_xyzs=INIT_XYZS,
                         initial_rpys=INIT_RPYS,
@@ -115,9 +115,6 @@ def run(
     action = np.zeros((num_drones,4))
     START = time.time()
     for i in range(0, int(duration_sec*env.CTRL_FREQ)):
-
-        #### Make it rain rubber ducks every three seconds #############################
-        if i%(3*env.CTRL_FREQ)==0: p.loadURDF("duck_vhacd.urdf", [0+random.gauss(0, 0.3),-0.5+random.gauss(0, 0.3),3], p.getQuaternionFromEuler([random.randint(0,360),random.randint(0,360),random.randint(0,360)]), physicsClientId=env.getPyBulletClient())
 
         #### Step the simulation ###################################
         obs, reward, terminated, truncated, info = env.step(action)
@@ -181,3 +178,19 @@ def run(
 if __name__ == "__main__":
     #### Define and parse (optional) arguments for the script ##
     run()
+
+    # Initialize environment
+    env = ProjectEnvironment(...)
+
+    # Get the matrix
+    map_matrix, x_min, y_min, resolution = env.get_occupancy_map()
+
+    # Example: Check if point (1.5, 2.0) is occupied
+    test_x, test_y = 1.5, 2.0
+    grid_x = int((test_x - x_min) / resolution)
+    grid_y = int((test_y - y_min) / resolution)
+
+    if map_matrix[grid_y, grid_x] == 1:
+        print("Collision!")
+    else:
+        print("Free space")
