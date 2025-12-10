@@ -7,14 +7,11 @@ This is a TU Delft project based on [gym-pybullet-drones](https://github.com/uti
 
 
 ```sh
-git clone https://github.com/utiasDSL/gym-pybullet-drones.git
-cd gym-pybullet-drones/
-
 conda create -n drones python=3.10
 conda activate drones
 
 pip3 install --upgrade pip
-pip3 install -e . # if needed, `sudo apt install build-essential` to install `gcc` and build `pybullet`
+pip3 install -e . # if needed, `sudo apt install build-essential` to install `gcc` and build `pybullet` and do this command in the directory with pyproject.toml
 
 # check installed packages with `conda list`, deactivate with `conda deactivate`, remove with `conda remove -n drones --all`
 ```
