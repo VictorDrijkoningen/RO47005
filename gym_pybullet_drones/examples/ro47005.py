@@ -15,6 +15,10 @@ from gym_pybullet_drones.control.DSLPIDControl import DSLPIDControl
 from gym_pybullet_drones.utils.Logger import Logger
 from gym_pybullet_drones.utils.utils import sync, str2bool
 
+
+from rrt_star_planner import RRTStarPlanner
+
+
 DEFAULT_DRONES = DroneModel("cf2x")
 DEFAULT_NUM_DRONES = 3
 DEFAULT_PHYSICS = Physics("pyb")
@@ -25,7 +29,7 @@ DEFAULT_USER_DEBUG_GUI = False
 DEFAULT_OBSTACLES = True
 DEFAULT_SIMULATION_FREQ_HZ = 240
 DEFAULT_CONTROL_FREQ_HZ = 48
-DEFAULT_DURATION_SEC = 30
+DEFAULT_DURATION_SEC = 400
 DEFAULT_OUTPUT_FOLDER = 'results'
 DEFAULT_COLAB = False
 
@@ -144,6 +148,38 @@ def run(
     goal_pos = get_furthest_goal(env, z_height=1.0)
     print(f"Goal set at furthest room: {goal_pos}")
     
+     # === RRT* PLANNING ======================
+    
+
+
+    print("\n[RRT*] Starting path planning...")
+    planner = RRTStarPlanner(max_iter=5000, goal_sample_rate=0.15, max_step=0.3)
+    waypoints, success = planner.plan(env, start=INIT_XYZS[0], goal=goal_pos)
+
+    if success:
+        trajectory = planner.get_smooth_trajectory(waypoints, samples_per_segment=50)
+        print(f"[RRT*] Trajectory: {len(trajectory)} points")
+        print(f"[RRT*] First 3 waypoints:")
+        for i in range(min(3, len(waypoints))):
+            print(f"      [{i}] {waypoints[i]}")
+        print(f"[RRT*] Last 3 waypoints:")
+        for i in range(max(0, len(waypoints)-3), len(waypoints)):
+            print(f"      [{i}] {waypoints[i]}")
+    else:
+        print("[RRT*] FAILED - using fallback")
+        trajectory = TARGET_POS
+
+    # --- VISUALIZE ---
+    if success:
+        print("\nGenerating visualization...")
+        planner.visualize_tree_and_path(waypoints)
+
+    # Reset counter for trajectory following
+    wp_counters = np.zeros(num_drones, dtype=int)
+    traj_idx = 0
+        # === END RRT* PLANNING ==========================
+
+
     # Visualize the goal with a duck
     # SPAWN THE DUCK 
     p.loadURDF("duck_vhacd.urdf", 
@@ -175,31 +211,82 @@ def run(
         ctrl = [DSLPIDControl(drone_model=drone) for i in range(num_drones)]
 
     #### Run the simulation ####################################
-    action = np.zeros((num_drones,4))
+    action = np.zeros((num_drones, 4))
     START = time.time()
-    for i in range(0, int(duration_sec*env.CTRL_FREQ)):
+    
+    for i in range(0, int(duration_sec * env.CTRL_FREQ)):
 
         #### Step the simulation ###################################
         obs, reward, terminated, truncated, info = env.step(action)
 
-        #### Compute control for the current way point #############
+        #### Compute control and Update Waypoints ###################
         for j in range(num_drones):
-            action[j, :], _, _ = ctrl[j].computeControlFromState(control_timestep=env.CTRL_TIMESTEP,
-                                                                    state=obs[j],
-                                                                    target_pos=np.hstack([TARGET_POS[wp_counters[j], 0:2], INIT_XYZS[j, 2]]),
-                                                                    target_rpy=INIT_RPYS[j, :]
-                                                                    )
+            
+            # --- DRONE 0 (RRT* FOLLOWER) ---
+            if j == 0 and success:
+                # 1. Get current target
+                current_wp_idx = int(wp_counters[j])
+                
+                if current_wp_idx < len(trajectory):
+                    target_pos = trajectory[current_wp_idx]
+                    
+                    # 2. Calculate PROXIMITY (Fix for Runaway Setpoint)
+                    current_pos = obs[j, :3]
+                    dist_to_wp = np.linalg.norm(target_pos - current_pos)
+                    
+                    # 3. Only advance if close enough (e.g., 20cm)
+                    if dist_to_wp < 0.2:
+                        wp_counters[j] += 1
+                        
+                    # 4. Orientation logic (Face movement direction)
+                    # Look ahead to the NEXT waypoint for smooth yaw
+                    next_idx = min(current_wp_idx + 1, len(trajectory) - 1)
+                    look_ahead_pos = trajectory[next_idx]
+                    
+                    direction = look_ahead_pos - current_pos
+                    dist_dir = np.linalg.norm(direction)
+                    
+                    if dist_dir > 0.1: 
+                        target_yaw = np.arctan2(direction[1], direction[0])
+                        target_rpy = np.array([0.0, 0.0, target_yaw])
+                    else:
+                        target_rpy = np.array([0.0, 0.0, obs[j, 5]]) # Keep current yaw
+                        
+                else:
+                    # End of path: Hover at last point
+                    target_pos = trajectory[-1]
+                    target_rpy = np.array([0.0, 0.0, 0.0])
 
-        #### Go to the next way point and loop #####################
-        for j in range(num_drones):
-            wp_counters[j] = wp_counters[j] + 1 if wp_counters[j] < (NUM_WP-1) else 0
+            # --- OTHER DRONES (CIRCLE PATTERN) ---
+            else:
+                # Simple circular pattern updates every tick (or every N ticks)
+                # Since this is a simple animation, unconditional increment is okay
+                # IF the circular trajectory is designed for the control frequency.
+                idx = wp_counters[j]
+                target_pos = TARGET_POS[idx, 0:3]
+                target_rpy = INIT_RPYS[j, :]
+                
+                # Increment circular counter, loop back
+                wp_counters[j] = (wp_counters[j] + 1) % NUM_WP
+
+            # --- COMPUTE CONTROL ---
+            action[j, :], _, _ = ctrl[j].computeControlFromState(
+                control_timestep=env.CTRL_TIMESTEP,
+                state=obs[j],
+                target_pos=target_pos,
+                target_rpy=target_rpy
+            )
+
 
         #### Log the simulation ####################################
         for j in range(num_drones):
+            # Use modulo to safely index TARGET_POS
+            safe_idx = int(wp_counters[j]) % NUM_WP
+            
             logger.log(drone=j,
                        timestamp=i/env.CTRL_FREQ,
                        state=obs[j],
-                       control=np.hstack([TARGET_POS[wp_counters[j], 0:2], INIT_XYZS[j, 2], INIT_RPYS[j, :], np.zeros(6)])
+                       control=np.hstack([TARGET_POS[safe_idx, 0:2], INIT_XYZS[j, 2], INIT_RPYS[j, :], np.zeros(6)])
                        )
             
             # Check if drone is in endzone
@@ -212,7 +299,8 @@ def run(
                     drones_in_endzone_times[j] = time.time()-START
 
                 drones_in_endzone[j] = True
-
+                if j == 0 and drones_in_endzone[0]:
+                    print(f"✓ TARGET REACHED in {drones_in_endzone_times[0]:.2f} seconds!")
         #### Printout ##############################################
         env.render()
 
@@ -220,6 +308,10 @@ def run(
         if gui:
             sync(i, START, env.CTRL_TIMESTEP)
 
+        # Stop simulation if drone 0 reached goal 
+        if success and drones_in_endzone[0]:
+            print("\nStopping simulation - goal reached.")
+            break
     #### Close the environment #################################
     env.close()
 
