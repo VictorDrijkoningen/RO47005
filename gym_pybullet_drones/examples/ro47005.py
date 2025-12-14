@@ -20,7 +20,7 @@ from rrt_star_planner import RRTStarPlanner
 
 
 DEFAULT_DRONES = DroneModel("cf2x")
-DEFAULT_NUM_DRONES = 3
+DEFAULT_NUM_DRONES = 1
 DEFAULT_PHYSICS = Physics("pyb")
 DEFAULT_GUI = True
 DEFAULT_RECORD_VISION = False
@@ -127,7 +127,7 @@ def run(
         TARGET_POS[i, :] = R*np.cos((i/NUM_WP)*(2*np.pi)+np.pi/2)+INIT_XYZS[0, 0], R*np.sin((i/NUM_WP)*(2*np.pi)+np.pi/2)+INIT_XYZS[0, 1], 0
     wp_counters = np.array([int((i*NUM_WP/6)%NUM_WP) for i in range(num_drones)])
 
-    time_trajectory_calculation = time.time() - _
+    
 
     #### Create the environment ################################
     env = ProjectEnvironment(drone_model=drone,
@@ -169,6 +169,7 @@ def run(
         print("[RRT*] FAILED - using fallback")
         trajectory = TARGET_POS
 
+    time_trajectory_calculation = time.time() - _
     # --- VISUALIZE ---
     if success:
         print("\nGenerating visualization...")
