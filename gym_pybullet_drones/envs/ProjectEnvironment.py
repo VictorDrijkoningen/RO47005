@@ -340,24 +340,37 @@ class ProjectEnvironment(CtrlAviary):
     def get_occupancy_map(self):
         return self.occupancy_map, self.x_min, self.y_min, self.z_min, self.RESOLUTION
 
-    def check_collision(self, position):
+    def check_collision(self, position, safety_radius=0.05):
         """
-        3D Collision Check.
+        3D Collision Check with safety margin.
+        Checks sphere around position instead of single point.
         """
         x, y, z = position[0], position[1], position[2]
         
-        # Grid Indices
-        c = int((x - self.x_min) / self.RESOLUTION)
-        r = int((y - self.y_min) / self.RESOLUTION)
-        k = int((z - self.z_min) / self.RESOLUTION)
+        # Check a small radius around the position for safety
+        # This prevents getting stuck on voxel boundaries
+        check_offsets = [
+            (0, 0, 0),  # Center
+            (safety_radius, 0, 0), (-safety_radius, 0, 0),
+            (0, safety_radius, 0), (0, -safety_radius, 0),
+            (0, 0, safety_radius), (0, 0, -safety_radius)
+        ]
         
-        # Bounds Check
-        rows, cols, height = self.occupancy_map.shape
-        if r < 0 or r >= rows or c < 0 or c >= cols or k < 0 or k >= height:
-            return True # Out of bounds (e.g., hit ceiling or flew away)
+        for dx, dy, dz in check_offsets:
+            cx, cy, cz = x + dx, y + dy, z + dz
             
-        # Voxel Check
-        if self.occupancy_map[r, c, k] == 1:
-            return True
+            # Grid Indices
+            c = int((cx - self.x_min) / self.RESOLUTION)
+            r = int((cy - self.y_min) / self.RESOLUTION)
+            k = int((cz - self.z_min) / self.RESOLUTION)
             
+            # Bounds Check
+            rows, cols, height = self.occupancy_map.shape
+            if r < 0 or r >= rows or c < 0 or c >= cols or k < 0 or k >= height:
+                return True  # Out of bounds
+            
+            # Voxel Check
+            if self.occupancy_map[r, c, k] == 1:
+                return True  # Hit obstacle
+        
         return False
