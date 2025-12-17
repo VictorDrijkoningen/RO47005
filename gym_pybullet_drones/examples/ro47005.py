@@ -210,10 +210,10 @@ def run(
                physicsClientId=env.getPyBulletClient())
     
     # Define Endzone Box (Target Room Volume) for success check
-    # +/- 1.5m around the goal point
+    # +/- 1.5m around the goal points
     endzone_box = [
-        goal_pos[0] - 1.5, goal_pos[0] + 1.5, 
-        goal_pos[1] - 1.5, goal_pos[1] + 1.5, 
+        goal_pos[0] - 0.5, goal_pos[0] + 0.5, 
+        goal_pos[1] - 0.5, goal_pos[1] + 0.5, 
         0.1, 2.0
     ]
     # -----------------------
