@@ -357,5 +357,5 @@ class RRTStarPlanner:
         
         plt.tight_layout()
         plt.ion()
-        plt.show(block=False)
+        plt.show(block=True)
         plt.pause(0.5)
