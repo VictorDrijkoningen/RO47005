@@ -333,16 +333,19 @@ def run(
 
     #### Save the simulation results ###########################
     logger.save()
-    
-    print(f"Computational time for trajectory planner: {time_trajectory_calculation}")
-    print(f"Trajectory length: {trajectory_length}")
-    print(f"Drone in endzone took: {drones_in_endzone_times[0]}")
-    print(f"Drone success: {drones_in_endzone[0]}")
 
     #### Plot the simulation results ###########################
     if plot:
         logger.plot()
-    return
+    return {"time_trajectory_calculation" : time_trajectory_calculation, 
+            "trajectory_length":trajectory_length,
+            "drones_in_endzone_times" : drones_in_endzone_times,
+            "drones_in_endzone" : drones_in_endzone}
 
 if __name__ == "__main__":
     output = run()
+
+    print(f"Computational time for trajectory planner: {output['time_trajectory_calculation']}")
+    print(f"Trajectory length: {output['trajectory_length']}")
+    print(f"Drone in endzone took: {output['drones_in_endzone_times']}")
+    print(f"Drone success: {output['drones_in_endzone']}")
