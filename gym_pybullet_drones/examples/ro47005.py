@@ -115,8 +115,8 @@ def run(
     INIT_XYZS = np.array([[R*np.cos((i/6)*2*np.pi+np.pi/2), R*np.sin((i/6)*2*np.pi+np.pi/2), H+i*H_STEP] for i in range(num_drones)])
     INIT_RPYS = np.array([[0, 0,  i * (np.pi/2)/num_drones] for i in range(num_drones)])
 
-    #### Initialize a circular trajectory (Placeholder) ##########
-    _ = time.time()
+
+    path_planner_start_time = time.time()
     PERIOD = 20
     NUM_WP = control_freq_hz*PERIOD
     TARGET_POS = np.zeros((NUM_WP,3))
@@ -157,7 +157,7 @@ def run(
     goal_pos = get_furthest_goal(env, z_height=1.0)
     print(f"Goal set at furthest room: {goal_pos}")
     
-     # === RRT* PLANNING ======================
+    # === RRT* PLANNING ======================
     
 
 
@@ -178,16 +178,22 @@ def run(
         print("[RRT*] FAILED - using fallback")
         trajectory = TARGET_POS
 
-    time_trajectory_calculation = time.time() - _
+    time_trajectory_calculation = time.time() - path_planner_start_time
+
     # --- VISUALIZE ---
+    trajectory_length = -np.inf
     if success:
+        # calculate the trajectory length 
+        trajectory_length = 0
+        for waypoint_idx in range(len(trajectory)-1):
+            trajectory_length += np.linalg.norm(trajectory[waypoint_idx] -  trajectory[waypoint_idx+1])
         print("\nGenerating visualization...")
         planner.visualize_tree_and_path(waypoints)
 
     # Reset counter for trajectory following
     wp_counters = np.zeros(num_drones, dtype=int)
     traj_idx = 0
-        # === END RRT* PLANNING ==========================
+    # === END RRT* PLANNING ==========================
 
 
     # Visualize the goal with a duck
@@ -329,12 +335,14 @@ def run(
     logger.save()
     
     print(f"Computational time for trajectory planner: {time_trajectory_calculation}")
-    print(f"Drones in endzone times: {drones_in_endzone_times}")
-    print(f"Drones success: {drones_in_endzone}")
+    print(f"Trajectory length: {trajectory_length}")
+    print(f"Drone in endzone took: {drones_in_endzone_times[0]}")
+    print(f"Drone success: {drones_in_endzone[0]}")
 
     #### Plot the simulation results ###########################
     if plot:
         logger.plot()
+    return
 
 if __name__ == "__main__":
-    run()
+    output = run()
