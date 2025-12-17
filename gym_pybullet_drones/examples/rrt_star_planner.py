@@ -104,11 +104,19 @@ class RRTStarPlanner:
     
     
     def radius(self, n):
-        """RRT* radius: r = c * sqrt(ln(n) / n)"""
-        if n < 2:
-            return 2.0
-        # For 3D, typical c is 2**(1/3) * sqrt(pi) ≈ 2.5
-        return min(2.0, 2.5 * np.sqrt(np.log(n) / n))
+        if n < 10:
+            return 2.5
+            
+        # Gamma constant for 3D (tuned for exploration)
+        gamma = 4.0 
+        
+        # Standard RRT* decay formula for 3D
+        r = gamma * (np.log(n) / n) ** (1/3)
+        
+        # --- THE FIX: Lower Bound ---
+        # Never let the radius shrink smaller than 1.5x the step size.
+        # If max_step is 0.3, minimum radius will be 0.45.
+        return max(r, 1.5 * self.max_step)
     
     
     def plan(self, env, start, goal):
@@ -151,7 +159,7 @@ class RRTStarPlanner:
         best_goal_idx = -1
         best_goal_cost = float('inf')
         
-        # ========== MAIN RRT* LOOP ==========
+        '''# ========== MAIN RRT* LOOP ==========
         for iteration in range(self.max_iter):
             
             # Progress output
@@ -257,6 +265,8 @@ class RRTStarPlanner:
                         best_goal_idx = new_node_idx
                         best_goal_cost = goal_cost
                         print(f"  [GOAL FOUND] Cost: {goal_cost:.2f}m at iteration {iteration}")
+
+                        print(f" | Goal cost: {best_goal_cost:.2f}m")
         
         # ========== EXTRACT PATH ==========
         print(f"\n{'='*70}")
@@ -282,6 +292,150 @@ class RRTStarPlanner:
         print(f"  Waypoints: {len(waypoints)}")
         print(f"  Tree nodes: {len(nodes)}")
         print(f"{'='*70}\n")
+        
+        return waypoints, True'''
+
+    def plan(self, env, start, goal):
+        """
+        RRT* ALGORITHM (Fixed Printing)
+        """
+        start = np.array(start, dtype=float)
+        goal = np.array(goal, dtype=float)
+        
+        # ... (Bounds setup remains the same) ...
+        occ_map, x_min, y_min, z_min, resolution = env.get_occupancy_map()
+        rows, cols, height = occ_map.shape
+        bounds = {
+            'x': [x_min, x_min + cols * resolution],
+            'y': [y_min, y_min + rows * resolution],
+            'z': [z_min, z_min + height * resolution]
+        }
+        
+        # ... (Print headers remain the same) ...
+
+        # Initialize tree
+        nodes = [start.copy()]
+        costs = [0.0] 
+        parents = [-1]
+        
+        # --- FIX: Track ALL nodes that reach the goal ---
+        goal_indices = [] 
+        
+        for iteration in range(self.max_iter):
+            
+            # ===== PROGRESS & DYNAMIC COST CALCULATION =====
+            if iteration % 500 == 0:
+                current_min_cost = float('inf')
+                
+                # Check all nodes that touch the goal to find the TRUE current best
+                for idx in goal_indices:
+                    # Cost = Cost to Node + Distance to Goal
+                    c = costs[idx] + self.distance(nodes[idx], goal)
+                    if c < current_min_cost:
+                        current_min_cost = c
+                
+                status = f"Iter {iteration:5d}/{self.max_iter} | Nodes: {len(nodes):5d}"
+                if current_min_cost != float('inf'):
+                    status += f" | Best Cost: {current_min_cost:.4f}m"
+                print(status)
+            
+            # ===== STEP 1: SAMPLE =====
+            q_rand = self.sample_config(bounds, goal)
+            
+            # ===== STEP 2: NEAREST =====
+            nearest_idx = self.nearest(q_rand, nodes)
+            q_near = nodes[nearest_idx]
+            
+            # ===== STEP 3: STEER =====
+            q_new = self.steer(q_near, q_rand)
+            
+            # ===== STEP 4: COLLISION CHECK =====
+            if not self.is_collision_free(env, q_near, q_new, num_samples=20):
+                continue
+            
+            # ===== STEP 5: NEAR =====
+            r = self.radius(len(nodes))
+            neighbor_indices = self.near(q_new, nodes, r)
+            
+            # ===== STEP 6: CHOOSE PARENT =====
+            best_parent_idx = nearest_idx
+            best_cost_to_new = costs[nearest_idx] + self.distance(q_near, q_new)
+            
+            for neighbor_idx in neighbor_indices:
+                q_neighbor = nodes[neighbor_idx]
+                if not self.is_collision_free(env, q_neighbor, q_new, num_samples=20):
+                    continue
+                
+                cost_via_neighbor = costs[neighbor_idx] + self.distance(q_neighbor, q_new)
+                
+                if cost_via_neighbor < best_cost_to_new:
+                    best_parent_idx = neighbor_idx
+                    best_cost_to_new = cost_via_neighbor
+            
+            # ===== STEP 7: ADD NODE =====
+            nodes.append(q_new.copy())
+            costs.append(best_cost_to_new)
+            parents.append(best_parent_idx)
+            new_node_idx = len(nodes) - 1
+            
+            self.tree_nodes.append(q_new.copy())
+            self.tree_edges.append((nodes[best_parent_idx].copy(), q_new.copy()))
+            
+            # ===== STEP 8: REWIRE (OPTIMIZATION) =====
+            for neighbor_idx in neighbor_indices:
+                q_neighbor = nodes[neighbor_idx]
+                if not self.is_collision_free(env, q_new, q_neighbor, num_samples=20):
+                    continue
+                
+                cost_via_new = best_cost_to_new + self.distance(q_new, q_neighbor)
+                
+                if cost_via_new < costs[neighbor_idx]:
+                    cost_reduction = costs[neighbor_idx] - cost_via_new
+                    parents[neighbor_idx] = new_node_idx
+                    costs[neighbor_idx] = cost_via_new
+                    
+                    # Propagate cost reduction to descendants
+                    stack = [neighbor_idx]
+                    while stack:
+                        curr_idx = stack.pop()
+                        children = [i for i, p in enumerate(parents) if p == curr_idx]
+                        for child in children:
+                            costs[child] -= cost_reduction
+                            stack.append(child)
+            
+            # ===== STEP 9: CHECK GOAL =====
+            dist_to_goal = self.distance(q_new, goal)
+            if dist_to_goal <= self.max_step:
+                if self.is_collision_free(env, q_new, goal, num_samples=20):
+                    # Add this node to our list of "goal connectors"
+                    if new_node_idx not in goal_indices:
+                        goal_indices.append(new_node_idx)
+
+        # ========== EXTRACT PATH ==========
+        if not goal_indices:
+            print("✗ NO PATH FOUND")
+            return None, False
+
+        # Find the absolute best path among all goal-connected nodes
+        best_idx = -1
+        min_cost = float('inf')
+        
+        for idx in goal_indices:
+            cost = costs[idx] + self.distance(nodes[idx], goal)
+            if cost < min_cost:
+                min_cost = cost
+                best_idx = idx
+        
+        print(f"✓ PATH FOUND! Final Cost: {min_cost:.4f}m")
+        
+        waypoints = []
+        curr = best_idx
+        while curr != -1:
+            waypoints.append(nodes[curr].copy())
+            curr = parents[curr]
+        
+        waypoints.reverse()
+        waypoints.append(goal.copy())
         
         return waypoints, True
     
