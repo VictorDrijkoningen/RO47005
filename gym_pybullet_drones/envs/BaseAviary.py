@@ -37,7 +37,7 @@ class BaseAviary(gym.Env):
                  user_debug_gui=True,
                  vision_attributes=False,
                  output_folder='results',
-                 seed = 0
+                 seed: int = 0,
                  ):
         """Initialization of a generic aviary environment.
 

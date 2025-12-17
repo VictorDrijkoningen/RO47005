@@ -10,7 +10,7 @@ class CtrlAviary(BaseAviary):
     ################################################################################
 
     def __init__(self,
-                 seed: int=155,
+                 seed: int=0,
                  drone_model: DroneModel=DroneModel.CF2X,
                  num_drones: int=1,
                  neighbourhood_radius: float=np.inf,
@@ -55,7 +55,8 @@ class CtrlAviary(BaseAviary):
             Whether to draw the drones' axes and the GUI RPMs sliders.
 
         """
-        super().__init__(drone_model=drone_model,
+        super().__init__(seed=seed,
+                         drone_model=drone_model,
                          num_drones=num_drones,
                          neighbourhood_radius=neighbourhood_radius,
                          initial_xyzs=initial_xyzs,
