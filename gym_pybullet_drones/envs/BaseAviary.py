@@ -36,7 +36,8 @@ class BaseAviary(gym.Env):
                  obstacles=False,
                  user_debug_gui=True,
                  vision_attributes=False,
-                 output_folder='results'
+                 output_folder='results',
+                 seed = 0
                  ):
         """Initialization of a generic aviary environment.
 
@@ -72,6 +73,7 @@ class BaseAviary(gym.Env):
         """
         #### Constants #############################################
         self.G = 9.8
+        self.seed = seed
         self.RAD2DEG = 180/np.pi
         self.DEG2RAD = np.pi/180
         self.CTRL_FREQ = ctrl_freq

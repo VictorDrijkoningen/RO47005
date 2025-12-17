@@ -10,7 +10,7 @@ class ProjectEnvironment(CtrlAviary):
         """
         Builds the environment and generates a 3D Occupancy Grid (Voxel Map).
         """
-        np.random.seed(155)
+        np.random.seed(self.seed)
 
         # --- Configuration ---
         ROWS, COLS = 3, 3

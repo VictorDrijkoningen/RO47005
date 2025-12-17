@@ -18,7 +18,7 @@ from gym_pybullet_drones.utils.utils import sync, str2bool
 
 from rrt_star_planner import RRTStarPlanner
 
-
+DEFAULT_SEED = 155
 DEFAULT_DRONES = DroneModel("cf2x")
 DEFAULT_NUM_DRONES = 1
 DEFAULT_PHYSICS = Physics("pyb")
@@ -92,6 +92,7 @@ def get_furthest_goal(env, z_height):
     return np.array([center_x, center_y, z_height])
 
 def run(
+        seed=DEFAULT_SEED,
         drone=DEFAULT_DRONES,
         num_drones=DEFAULT_NUM_DRONES,
         physics=DEFAULT_PHYSICS,
@@ -104,7 +105,7 @@ def run(
         control_freq_hz=DEFAULT_CONTROL_FREQ_HZ,
         duration_sec=DEFAULT_DURATION_SEC,
         output_folder=DEFAULT_OUTPUT_FOLDER,
-        colab=DEFAULT_COLAB
+        colab=DEFAULT_COLAB,
         ):
     #### Initialize the simulation #############################
     H = .1
@@ -141,7 +142,8 @@ def run(
                         gui=gui,
                         record=record_video,
                         obstacles=obstacles,
-                        user_debug_gui=user_debug_gui
+                        user_debug_gui=user_debug_gui,
+                        seed = seed
                         )
     
     # --- SET CUSTOM CAMERA START POSITION ---
@@ -343,7 +345,7 @@ def run(
             "drones_in_endzone" : drones_in_endzone}
 
 if __name__ == "__main__":
-    output = run()
+    output = run(155)
 
     print(f"Computational time for trajectory planner: {output['time_trajectory_calculation']}")
     print(f"Trajectory length: {output['trajectory_length']}")

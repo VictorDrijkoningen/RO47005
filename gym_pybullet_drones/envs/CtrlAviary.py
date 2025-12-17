@@ -10,6 +10,7 @@ class CtrlAviary(BaseAviary):
     ################################################################################
 
     def __init__(self,
+                 seed: int=155,
                  drone_model: DroneModel=DroneModel.CF2X,
                  num_drones: int=1,
                  neighbourhood_radius: float=np.inf,
