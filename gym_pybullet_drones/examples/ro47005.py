@@ -32,6 +32,7 @@ DEFAULT_CONTROL_FREQ_HZ = 48
 DEFAULT_DURATION_SEC = 400
 DEFAULT_OUTPUT_FOLDER = 'results'
 DEFAULT_COLAB = False
+DEFAULT_SHOW_RRT_GRAPHS = True
 
 # --- RRT / COLLISION HELPER FUNCTIONS ---
 
@@ -106,6 +107,7 @@ def run(
         duration_sec=DEFAULT_DURATION_SEC,
         output_folder=DEFAULT_OUTPUT_FOLDER,
         colab=DEFAULT_COLAB,
+        show_rrt_graphs=DEFAULT_SHOW_RRT_GRAPHS
         ):
     #### Initialize the simulation #############################
     H = .1
@@ -190,7 +192,8 @@ def run(
         for waypoint_idx in range(len(trajectory)-1):
             trajectory_length += np.linalg.norm(trajectory[waypoint_idx] -  trajectory[waypoint_idx+1])
         print("\nGenerating visualization...")
-        planner.visualize_tree_and_path(waypoints)
+        if show_rrt_graphs:
+            planner.visualize_tree_and_path(waypoints)
 
     # Reset counter for trajectory following
     wp_counters = np.zeros(num_drones, dtype=int)
@@ -339,10 +342,10 @@ def run(
     #### Plot the simulation results ###########################
     if plot:
         logger.plot()
-    return {"time_trajectory_calculation" : time_trajectory_calculation, 
+    return dict({"time_trajectory_calculation" : time_trajectory_calculation, 
             "trajectory_length":trajectory_length,
             "drones_in_endzone_times" : drones_in_endzone_times,
-            "drones_in_endzone" : drones_in_endzone}
+            "drones_in_endzone" : drones_in_endzone})
 
 if __name__ == "__main__":
     output = run(155)
