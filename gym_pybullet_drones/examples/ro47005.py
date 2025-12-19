@@ -29,7 +29,7 @@ DEFAULT_USER_DEBUG_GUI = False
 DEFAULT_OBSTACLES = True
 DEFAULT_SIMULATION_FREQ_HZ = 240
 DEFAULT_CONTROL_FREQ_HZ = 48
-DEFAULT_DURATION_SEC = 400
+DEFAULT_DURATION_SEC = 100
 DEFAULT_OUTPUT_FOLDER = 'results'
 DEFAULT_COLAB = False
 DEFAULT_SHOW_RRT_GRAPHS = True
@@ -107,7 +107,8 @@ def run(
         duration_sec=DEFAULT_DURATION_SEC,
         output_folder=DEFAULT_OUTPUT_FOLDER,
         colab=DEFAULT_COLAB,
-        show_rrt_graphs=DEFAULT_SHOW_RRT_GRAPHS
+        show_rrt_graphs=DEFAULT_SHOW_RRT_GRAPHS,
+        print_debug_info=True,
         ):
     #### Initialize the simulation #############################
     H = .1
@@ -159,14 +160,15 @@ def run(
 
     # --- GOAL GENERATION ---
     goal_pos = get_furthest_goal(env, z_height=1.0)
-    print(f"Goal set at furthest room: {goal_pos}")
+    if print_debug_info:
+        print(f"Goal set at furthest room: {goal_pos}")
     
     # === RRT* PLANNING ======================
     
 
 
     print("\n[RRT*] Starting path planning...")
-    planner = RRTStarPlanner(max_iter=5000, goal_sample_rate=0.15, max_step=0.3)
+    planner = RRTStarPlanner(max_iter=5000, goal_sample_rate=0.15, max_step=0.3, print_debug_info=print_debug_info)
     waypoints, success = planner.plan(env, start=INIT_XYZS[0], goal=goal_pos)
 
     if success:
@@ -191,8 +193,8 @@ def run(
         trajectory_length = 0
         for waypoint_idx in range(len(trajectory)-1):
             trajectory_length += np.linalg.norm(trajectory[waypoint_idx] -  trajectory[waypoint_idx+1])
-        print("\nGenerating visualization...")
         if show_rrt_graphs:
+            print("\nGenerating visualization...")
             planner.visualize_tree_and_path(waypoints)
 
     # Reset counter for trajectory following
@@ -210,7 +212,7 @@ def run(
                physicsClientId=env.getPyBulletClient())
     
     # Define Endzone Box (Target Room Volume) for success check
-    # +/- 1.5m around the goal points
+    # +/- 1.0m around the goal points
     endzone_box = [
         goal_pos[0] - 0.5, goal_pos[0] + 0.5, 
         goal_pos[1] - 0.5, goal_pos[1] + 0.5, 
@@ -323,7 +325,8 @@ def run(
                 if j == 0 and drones_in_endzone[0]:
                     print(f"✓ TARGET REACHED in {drones_in_endzone_times[0]:.2f} seconds!")
         #### Printout ##############################################
-        env.render()
+        if print_debug_info:
+            env.render()
 
         #### Sync the simulation ###################################
         if gui:
@@ -331,7 +334,8 @@ def run(
 
         # Stop simulation if drone 0 reached goal 
         if success and drones_in_endzone[0]:
-            print("\nStopping simulation - goal reached.")
+            if print_debug_info:
+                print("\nStopping simulation - goal reached.")
             break
     #### Close the environment #################################
     env.close()

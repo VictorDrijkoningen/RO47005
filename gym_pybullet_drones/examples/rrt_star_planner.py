@@ -10,7 +10,7 @@ class RRTStarPlanner:
     RRT* motion planning algorithm for 3D space.
     """
     
-    def __init__(self, max_iter=5000, goal_sample_rate=0.15, max_step=0.3):
+    def __init__(self, max_iter=5000, goal_sample_rate=0.15, max_step=0.3, print_debug_info=True):
         """
         Args:
             max_iter: Maximum iterations
@@ -20,6 +20,7 @@ class RRTStarPlanner:
         self.max_iter = max_iter
         self.goal_sample_rate = goal_sample_rate
         self.max_step = max_step
+        self.print_debug_info = print_debug_info
         
         # For visualization
         self.tree_nodes = []
@@ -141,15 +142,16 @@ class RRTStarPlanner:
             'z': [z_min, z_min + height * resolution]
         }
         
-        print(f"\n{'='*70}")
-        print("RRT* ALGORITHM")
-        print(f"{'='*70}")
-        print(f"Start: {start}")
-        print(f"Goal: {goal}")
-        print(f"Bounds X: [{bounds['x'][0]:.2f}, {bounds['x'][1]:.2f}]")
-        print(f"Bounds Y: [{bounds['y'][0]:.2f}, {bounds['y'][1]:.2f}]")
-        print(f"Bounds Z: [{bounds['z'][0]:.2f}, {bounds['z'][1]:.2f}]")
-        print(f"{'='*70}\n")
+        if self.print_debug_info:
+            print(f"\n{'='*70}")
+            print("RRT* ALGORITHM")
+            print(f"{'='*70}")
+            print(f"Start: {start}")
+            print(f"Goal: {goal}")
+            print(f"Bounds X: [{bounds['x'][0]:.2f}, {bounds['x'][1]:.2f}]")
+            print(f"Bounds Y: [{bounds['y'][0]:.2f}, {bounds['y'][1]:.2f}]")
+            print(f"Bounds Z: [{bounds['z'][0]:.2f}, {bounds['z'][1]:.2f}]")
+            print(f"{'='*70}\n")
         
         # Initialize tree with start node
         nodes = [start.copy()]
@@ -337,7 +339,8 @@ class RRTStarPlanner:
                 status = f"Iter {iteration:5d}/{self.max_iter} | Nodes: {len(nodes):5d}"
                 if current_min_cost != float('inf'):
                     status += f" | Best Cost: {current_min_cost:.4f}m"
-                print(status)
+                if self.print_debug_info:
+                    print(status)
             
             # ===== STEP 1: SAMPLE =====
             q_rand = self.sample_config(bounds, goal)
