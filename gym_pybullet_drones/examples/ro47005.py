@@ -52,7 +52,6 @@ def check_line_collision(env, start_pos, end_pos, num_checks=10):
     return False
 
 def get_furthest_goal(env, z_height):
-
     """
     Finds a valid, collision-free goal inside the furthest room (ROWS-1, COLS-1).
     """
@@ -352,7 +351,7 @@ def run(
             "drones_in_endzone" : drones_in_endzone})
 
 if __name__ == "__main__":
-    output = run(155)
+    output = run()
 
     print(f"Computational time for trajectory planner: {output['time_trajectory_calculation']}")
     print(f"Trajectory length: {output['trajectory_length']}")
