@@ -37,10 +37,13 @@ avg_time_to_reach_goal = total_time_to_reach_goal/runs
 
 
 # Success rate
+failed_seeds = list()
 successes = 0
 for thing in data:
     if thing['drones_in_endzone'][0]:
         successes += 1
+    else:
+        failed_seeds.append(thing['seed'])
     # else:
     #     print(thing['seed'])
 
@@ -53,3 +56,5 @@ print(f"Average trajectory length : {np.round(avg_trajectory_length,2)}")
 print(f"Average time to reach_goal: {np.round(avg_time_to_reach_goal,2)}")
 print(f"Success rate              : {np.round(success_rate,2)}")
 
+
+print(f"failed seeds: {failed_seeds}")
