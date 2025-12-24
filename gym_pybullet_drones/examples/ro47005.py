@@ -115,8 +115,8 @@ def run(
     R = .3
     
     # Spawn drones centered at (0,0) which is now the first room
-    INIT_XYZS = np.array([[R*np.cos((i/6)*2*np.pi+np.pi/2), R*np.sin((i/6)*2*np.pi+np.pi/2), H+i*H_STEP] for i in range(num_drones)])
-    INIT_RPYS = np.array([[0, 0,  i * (np.pi/2)/num_drones] for i in range(num_drones)])
+    INIT_XYZS = np.array([[0, 0, H+i*H_STEP] for i in range(num_drones)])
+    INIT_RPYS = np.array([[0, 0,  0] for i in range(num_drones)])
 
 
     path_planner_start_time = time.time()

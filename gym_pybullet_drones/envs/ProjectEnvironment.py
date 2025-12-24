@@ -283,6 +283,11 @@ class ProjectEnvironment(CtrlAviary):
                 test_pos = [room_center_x + dx, room_center_y + dy, z_offset]
                 final_pos = [room_center_x + dx, room_center_y + dy, 0.0]
 
+                #if close to drone starting point, do not spawn obstacle
+                drone_safe_space = 1.0
+                if test_pos[0]<drone_safe_space and test_pos[0] >-drone_safe_space and test_pos[1]<drone_safe_space and test_pos[1] >-drone_safe_space:
+                    continue
+
                 # Collision Shape
                 col_id = p.createCollisionShape(p.GEOM_MESH, fileName=file_path, meshScale=[rand_scale]*3)
                 
